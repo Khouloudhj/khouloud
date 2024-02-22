@@ -1,0 +1,70 @@
+require 'net/http'
+
+module Moderable
+  extend ActiveSupport::Concern
+
+  included do
+    before_save :moderate_content
+  end
+
+  def moderate_content
+    columns_to_moderate.each do |column|
+      content = send(column)
+      if content_changed?(column) && content.present?
+        is_accepted = moderation_result(content)
+        self.is_accepted = is_accepted
+      end
+    end
+  end
+
+  def moderation_result(content)
+    uri = URI('https://moderation.logora.fr/predict')
+    res = Net::HTTP.post_form(uri, { content: content })
+    response = JSON.parse(res.body)
+    response['is_accepted']
+  rescue StandardError => e
+    Rails.logger.error "Error moderating content: #{e.message}"
+    false 
+  end
+
+  def content_changed?(column)
+    changes.key?(column)
+  end
+
+  def columns_to_moderate
+  
+    []
+  end
+end
+
+
+class ModerableTest < ActiveSupport::TestCase
+  class ModeratedModelTest < ApplicationRecord
+    include Moderable
+
+    attr_accessor :title, :body
+    before_save :initialize_attributes
+
+    def initialize_attributes
+      self.title = "Test Title"
+      self.body = "Test Body"
+    end
+  end
+
+  setup do
+    @model = ModeratedModelTest.new
+    @model.title = "Hateful content"
+    @model.body = "Inoffensive content"
+  end
+
+  test "moderation is called before saving" do
+    assert_changes -> { @model.is_accepted }, from: nil, to: false do
+      @model.save
+    end
+  end
+
+  test "moderation result is stored in is_accepted" do
+    @model.save
+    assert_not_nil @model.is_accepted
+  end
+end

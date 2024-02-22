@@ -1,0 +1,78 @@
+const express = require('express');
+const axios = require('axios');
+
+const app = express();
+const PORT = 3000;
+
+app.use(express.json());
+
+
+app.post('/api/moderation/predict', async (req, res) => {
+  try {
+    const { text, language } = req.body;
+    const response = await axios.post('https://moderation.logora.fr/predict', { text, language });
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+app.post('/api/moderation/score', async (req, res) => {
+  try {
+    const { text, language } = req.body;
+    const response = await axios.post('https://moderation.logora.fr/score', { text, language });
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+module.exports = app; 
+
+const assert = require('chai').assert;
+const axios = require('axios');
+const sinon = require('sinon');
+const app = require('./app'); 
+
+describe('Server', function () {
+  describe('POST /api/moderation/predict', function () {
+    it('should return moderation prediction', async function () {
+      
+      const axiosPostStub = sinon.stub(axios, 'post').resolves({ data: { probability: 0.8 } });
+
+      const response = await axios.post('http://localhost:3000/api/moderation/predict', {
+        text: 'Hateful content',
+        language: 'fr',
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(response.data, { probability: 0.8 });
+
+      axiosPostStub.restore();
+    });
+  });
+
+  describe('POST /api/moderation/score', function () {
+    it('should return moderation score', async function () {
+     
+      const axiosPostStub = sinon.stub(axios, 'post').resolves({ data: { score: 0.7 } });
+
+      const response = await axios.post('http://localhost:3000/api/moderation/score', {
+        text: 'Inoffensive content',
+        language: 'fr',
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(response.data, { score: 0.7 });
+
+      axiosPostStub.restore();
+    });
+  });
+});
+
